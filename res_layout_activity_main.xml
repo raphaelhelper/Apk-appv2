@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Word Popup"
+            android:textSize="30sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Đọc toàn bộ file .txt trong một thư mục đã chọn và hiện từ vựng nổi trên app khác."
+            android:textSize="16sp" />
+
+        <Button
+            android:id="@+id/folderButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="Chọn thư mục chứa file .txt" />
+
+        <TextView
+            android:id="@+id/folderText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="📁 Chưa chọn thư mục dữ liệu."
+            android:textSize="14sp" />
+
+        <Button
+            android:id="@+id/overlayButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="Cấp quyền popup nổi" />
+
+        <TextView
+            android:id="@+id/statusText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Đang kiểm tra..."
+            android:textSize="15sp" />
+
+        <EditText
+            android:id="@+id/intervalEdit"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:hint="Khoảng cách giữa popup (phút)"
+            android:inputType="number"
+            android:text="10" />
+
+        <Button
+            android:id="@+id/startButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Bắt đầu" />
+
+        <Button
+            android:id="@+id/stopButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Dừng" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="Định dạng file:&#10;&#10;1.&#10;two-story&#10;hai tầng&#10;Example: They live in a nice two-story house.&#10;Dịch: Họ sống trong một ngôi nhà hai tầng đẹp.&#10;&#10;2.&#10;right-hand&#10;bên phải&#10;Example: Turn onto the right-hand street.&#10;Dịch: Hãy rẽ vào con đường bên phải.&#10;&#10;Có thể có khoảng 200 file .txt trong cùng thư mục. App đọc toàn bộ."
+            android:textSize="14sp" />
+    </LinearLayout>
+</ScrollView>
