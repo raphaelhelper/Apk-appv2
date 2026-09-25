@@ -25,10 +25,12 @@ import java.io.InputStreamReader
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
 
+// 1. Cập nhật data class để lưu thêm bản dịch ví dụ
 private data class VocabWord(
     val word: String,
     val meaning: String,
-    val example: String?
+    val example: String?,
+    val exampleMeaning: String?
 )
 
 class PopupService : Service() {
@@ -49,7 +51,6 @@ class PopupService : Service() {
     private val showTask = object : Runnable {
         override fun run() {
             if (Settings.canDrawOverlays(this@PopupService)) {
-                // Nếu popup trước đó vẫn còn mở thì không chồng thêm popup mới.
                 if (popupView == null) showNextWord()
             }
             val minutes = getSharedPreferences(MainActivity.PREFS, MODE_PRIVATE)
@@ -74,7 +75,19 @@ class PopupService : Service() {
 
         title.text = item.word
         sub.text = item.meaning
-        example.text = item.example?.takeIf { it.isNotBlank() } ?: "Không có ví dụ trong file."
+
+        // 2. Gộp câu tiếng Anh + bản dịch tiếng Việt hiển thị cùng lúc
+        val exEn = item.example?.takeIf { it.isNotBlank() }
+        val exVi = item.exampleMeaning?.takeIf { it.isNotBlank() }
+
+        val fullExample = when {
+            exEn != null && exVi != null -> "$exEn\n👉 $exVi"
+            exEn != null -> exEn
+            exVi != null -> "👉 $exVi"
+            else -> "Không có ví dụ trong file."
+        }
+
+        example.text = fullExample
         example.visibility = View.GONE
 
         exampleButton.setOnClickListener {
@@ -137,7 +150,6 @@ class PopupService : Service() {
                     }
                 }
             } catch (_: Exception) {
-                // Bỏ qua file lỗi, tiếp tục đọc các file còn lại.
             }
         }
         return result
@@ -153,6 +165,7 @@ class PopupService : Service() {
         }
     }
 
+    // 3. Đọc thêm dòng "Dịch:" từ file văn bản
     private fun parseText(text: String): List<VocabWord> {
         val lines = text.replace("\r", "").lines()
         val entries = mutableListOf<VocabWord>()
@@ -176,6 +189,7 @@ class PopupService : Service() {
             val word = fields[0]
             val meaning = fields[1]
             var example: String? = null
+            var exampleMeaning: String? = null
 
             while (i < lines.size && !lines[i].trim().matches(Regex("\\d+\\."))) {
                 val s = lines[i].trim()
@@ -184,13 +198,13 @@ class PopupService : Service() {
                         example = s.substringAfter(":").trim()
                     }
                     s.startsWith("Dịch:", ignoreCase = true) -> {
-                        // Có thể thêm bản dịch ví dụ về sau; hiện popup chỉ cần câu tiếng Anh.
+                        exampleMeaning = s.substringAfter(":").trim()
                     }
                 }
                 i++
             }
 
-            entries += VocabWord(word, meaning, example)
+            entries += VocabWord(word, meaning, example, exampleMeaning)
         }
 
         return entries
