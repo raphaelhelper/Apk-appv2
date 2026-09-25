@@ -24,8 +24,8 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 
-// 1. Cập nhật data class để lưu thêm bản dịch ví dụ
 private data class VocabWord(
     val word: String,
     val meaning: String,
@@ -37,15 +37,30 @@ class PopupService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private var popupView: View? = null
     private var popupWindowManager: WindowManager? = null
-    private var wordsIndex = 0
+    
+    @Volatile
     private var words: List<VocabWord> = emptyList()
+    @Volatile
+    private var isLoading = false
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
-        words = loadWordsFromSelectedFolder()
+        
+        // Đọc 10.000 từ vựng ở luồng ngầm ngay khi khởi tạo để tránh đơ app
+        loadWordsInBackground()
+        
         handler.post(showTask)
+    }
+
+    private fun loadWordsInBackground() {
+        if (isLoading) return
+        isLoading = true
+        thread {
+            words = loadWordsFromSelectedFolder()
+            isLoading = false
+        }
     }
 
     private val showTask = object : Runnable {
@@ -61,10 +76,14 @@ class PopupService : Service() {
     }
 
     private fun showNextWord() {
-        if (words.isEmpty()) return
+        if (words.isEmpty()) {
+            // Nếu dữ liệu chưa đọc xong, thử kích hoạt đọc lại ở luồng ngầm
+            if (!isLoading) loadWordsInBackground()
+            return
+        }
 
-        val item = words[wordsIndex % words.size]
-        wordsIndex++
+        // Lấy ngẫu nhiên 1 từ vựng từ danh sách
+        val item = words.randomOrNull() ?: return
 
         val view = LayoutInflater.from(this).inflate(R.layout.popup_word, null)
         val title = view.findViewById<TextView>(R.id.wordText)
@@ -76,7 +95,6 @@ class PopupService : Service() {
         title.text = item.word
         sub.text = item.meaning
 
-        // 2. Gộp câu tiếng Anh + bản dịch tiếng Việt hiển thị cùng lúc
         val exEn = item.example?.takeIf { it.isNotBlank() }
         val exVi = item.exampleMeaning?.takeIf { it.isNotBlank() }
 
@@ -137,16 +155,35 @@ class PopupService : Service() {
         val root = DocumentFile.fromTreeUri(this, Uri.parse(raw)) ?: return emptyList()
         if (!root.canRead()) return emptyList()
 
-        val files = mutableListOf<DocumentFile>()
-        collectTxtFiles(root, files)
-        files.sortBy { it.uri.toString() }
+        val txtFiles = mutableListOf<DocumentFile>()
+        var blacklistFile: DocumentFile? = null
 
-        val result = mutableListOf<VocabWord>()
-        for (file in files) {
+        // Tách file blacklist.txt và các file từ vựng khác
+        collectFiles(root, txtFiles, onBlacklistFound = { blacklistFile = it })
+
+        // 1. Đọc danh sách từ bị chặn từ blacklist.txt (nếu có)
+        val blacklistSet = HashSet<String>()
+        blacklistFile?.let { file ->
             try {
                 contentResolver.openInputStream(file.uri)?.use { input ->
                     BufferedReader(InputStreamReader(input, StandardCharsets.UTF_8)).use { reader ->
-                        result += parseText(reader.readText())
+                        reader.forEachLine { line ->
+                            val trimmed = line.trim().lowercase()
+                            if (trimmed.isNotEmpty()) blacklistSet.add(trimmed)
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+            }
+        }
+
+        // 2. Đọc và lọc từ vựng từ các file còn lại
+        val result = mutableListOf<VocabWord>()
+        for (file in txtFiles) {
+            try {
+                contentResolver.openInputStream(file.uri)?.use { input ->
+                    BufferedReader(InputStreamReader(input, StandardCharsets.UTF_8)).use { reader ->
+                        result += parseText(reader.readText(), blacklistSet)
                     }
                 }
             } catch (_: Exception) {
@@ -155,18 +192,26 @@ class PopupService : Service() {
         return result
     }
 
-    private fun collectTxtFiles(directory: DocumentFile, out: MutableList<DocumentFile>) {
+    private fun collectFiles(
+        directory: DocumentFile,
+        txtFiles: MutableList<DocumentFile>,
+        onBlacklistFound: (DocumentFile) -> Unit
+    ) {
         for (child in directory.listFiles()) {
             if (child.isDirectory) {
-                collectTxtFiles(child, out)
-            } else if (child.isFile && child.name?.lowercase()?.endsWith(".txt") == true) {
-                out += child
+                collectFiles(child, txtFiles, onBlacklistFound)
+            } else if (child.isFile) {
+                val fileName = child.name?.lowercase() ?: ""
+                if (fileName == "blacklist.txt") {
+                    onBlacklistFound(child)
+                } else if (fileName.endsWith(".txt")) {
+                    txtFiles.add(child)
+                }
             }
         }
     }
 
-    // 3. Đọc thêm dòng "Dịch:" từ file văn bản
-    private fun parseText(text: String): List<VocabWord> {
+    private fun parseText(text: String, blacklist: Set<String>): List<VocabWord> {
         val lines = text.replace("\r", "").lines()
         val entries = mutableListOf<VocabWord>()
         var i = 0
@@ -204,7 +249,10 @@ class PopupService : Service() {
                 i++
             }
 
-            entries += VocabWord(word, meaning, example, exampleMeaning)
+            // Chỉ thêm vào danh sách nếu TỪ KHÔNG NẰM TRONG BLACKLIST
+            if (!blacklist.contains(word.trim().lowercase())) {
+                entries += VocabWord(word, meaning, example, exampleMeaning)
+            }
         }
 
         return entries
